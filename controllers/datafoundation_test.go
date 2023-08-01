@@ -19,12 +19,12 @@ var _ = Describe("ManagedOCS controller", func() {
 	)
 
 	ctx := context.Background()
-	managedOCSTemplate := &v1.ManagedOCS{
+	/*	managedOCSTemplate := &v1.ManagedOCS{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      managedOCSName,
 			Namespace: testPrimaryNamespace,
 		},
-	}
+	}*/
 	//scTemplate := templates.StorageClusterTemplate
 	scTemplate := ocsv1.StorageCluster{
 		ObjectMeta: metav1.ObjectMeta{
