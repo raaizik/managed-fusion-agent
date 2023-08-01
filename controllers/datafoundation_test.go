@@ -2,13 +2,13 @@ package controllers
 
 import (
 	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	utils "github.com/red-hat-storage/managed-fusion-agent/testutils"
 	ocsv1 "github.com/red-hat-storage/ocs-operator/api/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("ManagedOCS controller", func() {
@@ -19,12 +19,13 @@ var _ = Describe("ManagedOCS controller", func() {
 	)
 
 	ctx := context.Background()
-	/*	managedOCSTemplate := &v1.ManagedOCS{
+	managedOCSTemplate := &v1.ManagedOCS{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      managedOCSName,
 			Namespace: testPrimaryNamespace,
 		},
-	}*/
+	}
+	//scTemplate := templates.StorageClusterTemplate
 	scTemplate := ocsv1.StorageCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      storageClusterName,
@@ -327,204 +328,204 @@ var _ = Describe("ManagedOCS controller", func() {
 			"(ceph_cluster_total_bytes;)|(cluster:kubelet_volume_stats_used_bytes:provisioner:sum;)|" +
 			"(cluster:kube_persistentvolumeclaim_resource_requests_storage_bytes:provisioner:sum;)"*/
 
-	/*	setupUninstallConditions := func(
-			shouldAddonConfigMapExist bool,
-			addonConfigMapDeleteLabel string,
-			shouldStorageClusterBeReady bool,
-			shouldPrometheusBeReady bool,
-			shouldAlertmanagerBeReady bool,
-			shouldPV1Exist bool,
-			shouldPV2Exist bool,
-			shouldStorageConsumersExist bool,
-		) {
-			// Delete the configmap to ensure that we will not trigger uninstall accidentally
-			// via and intermediate state
-			configMap := addonConfigMapTemplate.DeepCopy()
-			err := k8sClient.Delete(ctx, configMap)
-			Expect(err == nil || errors.IsNotFound(err)).Should(BeTrue())
+	setupPreConditions := func(
+		//shouldAddonConfigMapExist bool,
+		//addonConfigMapDeleteLabel string,
+		shouldStorageClusterBeReady bool,
+		//shouldPrometheusBeReady bool,
+		//shouldAlertmanagerBeReady bool,
+		//shouldPV1Exist bool,
+		//shouldPV2Exist bool,
+		//shouldStorageConsumersExist bool,
+	) {
+		// Delete the configmap to ensure that we will not trigger uninstall accidentally
+		// via and intermediate state
+		/*		configMap := addonConfigMapTemplate.DeepCopy()
+				err := k8sClient.Delete(ctx, configMap)
+				Expect(err == nil || errors.IsNotFound(err)).Should(BeTrue())*/
 
-			// Setup storagecluster state
-			sc := scTemplate.DeepCopy()
-			Expect(k8sClient.Get(ctx, utils.GetResourceKey(sc), sc)).Should(Succeed())
-			if shouldStorageClusterBeReady {
-				sc.Status.Phase = "Ready"
-			} else {
-				sc.Status.Phase = ""
-			}
-			Expect(k8sClient.Status().Update(ctx, sc)).Should(Succeed())
-
-			// Setup prometheus state
-			prom := promTemplate.DeepCopy()
-			Expect(k8sClient.Get(ctx, utils.GetResourceKey(prom), prom)).Should(Succeed())
-			desiredReplicas := int32(1)
-			if prom.Spec.Replicas != nil {
-				desiredReplicas = *prom.Spec.Replicas
-			}
-			promSts := promStsTemplate.DeepCopy()
-			Expect(k8sClient.Get(ctx, utils.GetResourceKey(promSts), promSts)).Should(Succeed())
-			if shouldPrometheusBeReady {
-				promSts.Status.Replicas = desiredReplicas
-				promSts.Status.ReadyReplicas = desiredReplicas
-			} else {
-				promSts.Status.Replicas = 0
-				promSts.Status.ReadyReplicas = 0
-			}
-			Expect(k8sClient.Status().Update(ctx, promSts)).Should(Succeed())
-
-			// Setup alertmanager state
-			am := amTemplate.DeepCopy()
-			Expect(k8sClient.Get(ctx, utils.GetResourceKey(am), am)).Should(Succeed())
-			desiredReplicas = int32(1)
-			if am.Spec.Replicas != nil {
-				desiredReplicas = *am.Spec.Replicas
-			}
-			amSts := amStsTemplate.DeepCopy()
-			Expect(k8sClient.Get(ctx, utils.GetResourceKey(amSts), amSts)).Should(Succeed())
-			if shouldAlertmanagerBeReady {
-				amSts.Status.Replicas = desiredReplicas
-				amSts.Status.ReadyReplicas = desiredReplicas
-			} else {
-				amSts.Status.Replicas = 0
-				amSts.Status.ReadyReplicas = 0
-			}
-			Expect(k8sClient.Status().Update(ctx, amSts)).Should(Succeed())
-
-			// Setup pv1 state (an rbd backed pv in the primary namespace)
-			pv1 := pv1Template.DeepCopy()
-			if shouldPV1Exist {
-				err := k8sClient.Create(ctx, pv1)
-				Expect(err == nil || errors.IsAlreadyExists(err)).Should(BeTrue())
-			} else {
-				err := k8sClient.Get(ctx, utils.GetResourceKey(pv1), pv1)
-				if err == nil {
-					Expect(k8sClient.Delete(ctx, pv1)).Should(Succeed())
-				} else {
-					Expect(errors.IsNotFound(err)).Should(BeTrue())
-				}
-			}
-
-			// Setup pv2 state (an cephfs backed pv in the secondary namespace)
-			pv2 := pv2Template.DeepCopy()
-			if shouldPV2Exist {
-				err := k8sClient.Create(ctx, pv2)
-				Expect(err == nil || errors.IsAlreadyExists(err)).Should(BeTrue())
-			} else {
-				err := k8sClient.Get(ctx, utils.GetResourceKey(pv2), pv2)
-				if err == nil {
-					Expect(k8sClient.Delete(ctx, pv2)).Should(Succeed())
-				} else {
-					Expect(errors.IsNotFound(err)).Should(BeTrue())
-				}
-			}
-
-			// setup add-on configmap state
-			if shouldAddonConfigMapExist {
-				labels := map[string]string{}
-				if addonConfigMapDeleteLabel != "" {
-					labels[addonConfigMapDeleteLabel] = "dummy"
-				}
-				configMap.SetLabels(labels)
-				Expect(k8sClient.Create(ctx, configMap)).Should(Succeed())
-			}
-			cons := storageConsumerTemplate.DeepCopy()
-			if shouldStorageConsumersExist {
-				Expect(k8sClient.Create(ctx, cons)).Should(Succeed())
-			} else {
-				err := k8sClient.Get(ctx, utils.GetResourceKey(cons), cons)
-				if err == nil {
-					Expect(k8sClient.Delete(ctx, cons)).Should(Succeed())
-				} else {
-					Expect(errors.IsNotFound(err)).Should(BeTrue())
-				}
-			}
+		// Setup storagecluster state
+		sc := scTemplate.DeepCopy()
+		Expect(k8sClient.Get(ctx, utils.GetResourceKey(sc), sc)).Should(Succeed())
+		if shouldStorageClusterBeReady {
+			sc.Status.Phase = "Ready"
+		} else {
+			sc.Status.Phase = ""
 		}
+		Expect(k8sClient.Status().Update(ctx, sc)).Should(Succeed())
 
-		setupAlertmanagerConfigConditions := func(
-			shouldPagerdutySecretExist bool,
-			hasPagerdutyKey bool,
-			shouldDMSSecretExist bool,
-			hasSnitchUrl bool,
-			shouldSMTPSecretExist bool,
-			hasValueForSMTP bool,
-		) {
-			smtpSecret := smtpSecretTemplate.DeepCopy()
-			var smtpSecretExists bool
-			if err := k8sClient.Get(ctx, utils.GetResourceKey(smtpSecret), smtpSecret); err == nil {
-				smtpSecretExists = true
-			} else if errors.IsNotFound(err) {
-				smtpSecretExists = false
-			} else {
-				Expect(err).ToNot(HaveOccurred())
-			}
-			if shouldSMTPSecretExist {
-				if hasValueForSMTP {
-					smtpSecret.Data["host"] = []byte("test-host")
-					smtpSecret.Data["port"] = []byte("20")
-					smtpSecret.Data["username"] = []byte("test-key")
-					smtpSecret.Data["password"] = []byte("test-password")
-				} else {
-					smtpSecret.Data["host"] = []byte("")
-					smtpSecret.Data["port"] = []byte("")
-					smtpSecret.Data["username"] = []byte("")
-					smtpSecret.Data["password"] = []byte("")
+		/*		// Setup prometheus state
+				prom := promTemplate.DeepCopy()
+				Expect(k8sClient.Get(ctx, utils.GetResourceKey(prom), prom)).Should(Succeed())
+				desiredReplicas := int32(1)
+				if prom.Spec.Replicas != nil {
+					desiredReplicas = *prom.Spec.Replicas
 				}
-				if smtpSecretExists {
-					Expect(k8sClient.Update(ctx, smtpSecret)).Should(Succeed())
+				promSts := promStsTemplate.DeepCopy()
+				Expect(k8sClient.Get(ctx, utils.GetResourceKey(promSts), promSts)).Should(Succeed())
+				if shouldPrometheusBeReady {
+					promSts.Status.Replicas = desiredReplicas
+					promSts.Status.ReadyReplicas = desiredReplicas
 				} else {
-					Expect(k8sClient.Create(ctx, smtpSecret)).Should(Succeed())
+					promSts.Status.Replicas = 0
+					promSts.Status.ReadyReplicas = 0
 				}
-			} else if smtpSecretExists {
-				Expect(k8sClient.Delete(ctx, smtpSecret)).Should(Succeed())
-			}
+				Expect(k8sClient.Status().Update(ctx, promSts)).Should(Succeed())
 
-			dmsSecret := dmsSecretTemplate.DeepCopy()
-			var dmsSecretExists bool
-			if err := k8sClient.Get(ctx, utils.GetResourceKey(dmsSecret), dmsSecret); err == nil {
-				dmsSecretExists = true
-			} else if errors.IsNotFound(err) {
-				dmsSecretExists = false
-			} else {
-				Expect(err).ToNot(HaveOccurred())
-			}
-			if shouldDMSSecretExist {
-				if hasSnitchUrl {
-					dmsSecret.Data["SNITCH_URL"] = []byte("https://nosnch.in/fake_url")
-				} else {
-					dmsSecret.Data["SNITCH_URL"] = []byte("")
+				// Setup alertmanager state
+				am := amTemplate.DeepCopy()
+				Expect(k8sClient.Get(ctx, utils.GetResourceKey(am), am)).Should(Succeed())
+				desiredReplicas = int32(1)
+				if am.Spec.Replicas != nil {
+					desiredReplicas = *am.Spec.Replicas
 				}
-				if dmsSecretExists {
-					Expect(k8sClient.Update(ctx, dmsSecret)).Should(Succeed())
+				amSts := amStsTemplate.DeepCopy()
+				Expect(k8sClient.Get(ctx, utils.GetResourceKey(amSts), amSts)).Should(Succeed())
+				if shouldAlertmanagerBeReady {
+					amSts.Status.Replicas = desiredReplicas
+					amSts.Status.ReadyReplicas = desiredReplicas
 				} else {
-					Expect(k8sClient.Create(ctx, dmsSecret)).Should(Succeed())
+					amSts.Status.Replicas = 0
+					amSts.Status.ReadyReplicas = 0
 				}
-			} else if dmsSecretExists {
-				Expect(k8sClient.Delete(ctx, dmsSecret)).Should(Succeed())
-			}
+				Expect(k8sClient.Status().Update(ctx, amSts)).Should(Succeed())
 
-			pdSecret := pdSecretTemplate.DeepCopy()
-			var pdSecretExists bool
-			if err := k8sClient.Get(ctx, utils.GetResourceKey(pdSecret), pdSecret); err == nil {
-				pdSecretExists = true
-			} else if errors.IsNotFound(err) {
-				pdSecretExists = false
-			} else {
-				Expect(err).ToNot(HaveOccurred())
-			}
-			if shouldPagerdutySecretExist {
-				if hasPagerdutyKey {
-					pdSecret.Data["PAGERDUTY_KEY"] = []byte("test-key")
+				// Setup pv1 state (an rbd backed pv in the primary namespace)
+				pv1 := pv1Template.DeepCopy()
+				if shouldPV1Exist {
+					err := k8sClient.Create(ctx, pv1)
+					Expect(err == nil || errors.IsAlreadyExists(err)).Should(BeTrue())
 				} else {
-					pdSecret.Data["PAGERDUTY_KEY"] = []byte("")
+					err := k8sClient.Get(ctx, utils.GetResourceKey(pv1), pv1)
+					if err == nil {
+						Expect(k8sClient.Delete(ctx, pv1)).Should(Succeed())
+					} else {
+						Expect(errors.IsNotFound(err)).Should(BeTrue())
+					}
 				}
-				if pdSecretExists {
-					Expect(k8sClient.Update(ctx, pdSecret)).Should(Succeed())
+
+				// Setup pv2 state (an cephfs backed pv in the secondary namespace)
+				pv2 := pv2Template.DeepCopy()
+				if shouldPV2Exist {
+					err := k8sClient.Create(ctx, pv2)
+					Expect(err == nil || errors.IsAlreadyExists(err)).Should(BeTrue())
 				} else {
-					Expect(k8sClient.Create(ctx, pdSecret)).Should(Succeed())
+					err := k8sClient.Get(ctx, utils.GetResourceKey(pv2), pv2)
+					if err == nil {
+						Expect(k8sClient.Delete(ctx, pv2)).Should(Succeed())
+					} else {
+						Expect(errors.IsNotFound(err)).Should(BeTrue())
+					}
 				}
-			} else if pdSecretExists {
-				Expect(k8sClient.Delete(ctx, pdSecret)).Should(Succeed())
-			}
-		}*/
+
+				// setup add-on configmap state
+				if shouldAddonConfigMapExist {
+					labels := map[string]string{}
+					if addonConfigMapDeleteLabel != "" {
+						labels[addonConfigMapDeleteLabel] = "dummy"
+					}
+					configMap.SetLabels(labels)
+					Expect(k8sClient.Create(ctx, configMap)).Should(Succeed())
+				}
+				cons := storageConsumerTemplate.DeepCopy()
+				if shouldStorageConsumersExist {
+					Expect(k8sClient.Create(ctx, cons)).Should(Succeed())
+				} else {
+					err := k8sClient.Get(ctx, utils.GetResourceKey(cons), cons)
+					if err == nil {
+						Expect(k8sClient.Delete(ctx, cons)).Should(Succeed())
+					} else {
+						Expect(errors.IsNotFound(err)).Should(BeTrue())
+					}
+				}*/
+	}
+
+	/*		setupAlertmanagerConfigConditions := func(
+				shouldPagerdutySecretExist bool,
+				hasPagerdutyKey bool,
+				shouldDMSSecretExist bool,
+				hasSnitchUrl bool,
+				shouldSMTPSecretExist bool,
+				hasValueForSMTP bool,
+			) {
+				smtpSecret := smtpSecretTemplate.DeepCopy()
+				var smtpSecretExists bool
+				if err := k8sClient.Get(ctx, utils.GetResourceKey(smtpSecret), smtpSecret); err == nil {
+					smtpSecretExists = true
+				} else if errors.IsNotFound(err) {
+					smtpSecretExists = false
+				} else {
+					Expect(err).ToNot(HaveOccurred())
+				}
+				if shouldSMTPSecretExist {
+					if hasValueForSMTP {
+						smtpSecret.Data["host"] = []byte("test-host")
+						smtpSecret.Data["port"] = []byte("20")
+						smtpSecret.Data["username"] = []byte("test-key")
+						smtpSecret.Data["password"] = []byte("test-password")
+					} else {
+						smtpSecret.Data["host"] = []byte("")
+						smtpSecret.Data["port"] = []byte("")
+						smtpSecret.Data["username"] = []byte("")
+						smtpSecret.Data["password"] = []byte("")
+					}
+					if smtpSecretExists {
+						Expect(k8sClient.Update(ctx, smtpSecret)).Should(Succeed())
+					} else {
+						Expect(k8sClient.Create(ctx, smtpSecret)).Should(Succeed())
+					}
+				} else if smtpSecretExists {
+					Expect(k8sClient.Delete(ctx, smtpSecret)).Should(Succeed())
+				}
+
+				dmsSecret := dmsSecretTemplate.DeepCopy()
+				var dmsSecretExists bool
+				if err := k8sClient.Get(ctx, utils.GetResourceKey(dmsSecret), dmsSecret); err == nil {
+					dmsSecretExists = true
+				} else if errors.IsNotFound(err) {
+					dmsSecretExists = false
+				} else {
+					Expect(err).ToNot(HaveOccurred())
+				}
+				if shouldDMSSecretExist {
+					if hasSnitchUrl {
+						dmsSecret.Data["SNITCH_URL"] = []byte("https://nosnch.in/fake_url")
+					} else {
+						dmsSecret.Data["SNITCH_URL"] = []byte("")
+					}
+					if dmsSecretExists {
+						Expect(k8sClient.Update(ctx, dmsSecret)).Should(Succeed())
+					} else {
+						Expect(k8sClient.Create(ctx, dmsSecret)).Should(Succeed())
+					}
+				} else if dmsSecretExists {
+					Expect(k8sClient.Delete(ctx, dmsSecret)).Should(Succeed())
+				}
+
+				pdSecret := pdSecretTemplate.DeepCopy()
+				var pdSecretExists bool
+				if err := k8sClient.Get(ctx, utils.GetResourceKey(pdSecret), pdSecret); err == nil {
+					pdSecretExists = true
+				} else if errors.IsNotFound(err) {
+					pdSecretExists = false
+				} else {
+					Expect(err).ToNot(HaveOccurred())
+				}
+				if shouldPagerdutySecretExist {
+					if hasPagerdutyKey {
+						pdSecret.Data["PAGERDUTY_KEY"] = []byte("test-key")
+					} else {
+						pdSecret.Data["PAGERDUTY_KEY"] = []byte("")
+					}
+					if pdSecretExists {
+						Expect(k8sClient.Update(ctx, pdSecret)).Should(Succeed())
+					} else {
+						Expect(k8sClient.Create(ctx, pdSecret)).Should(Succeed())
+					}
+				} else if pdSecretExists {
+					Expect(k8sClient.Delete(ctx, pdSecret)).Should(Succeed())
+				}
+			}*/
 
 	Context("reconcile()", Ordered, func() {
 		/*		When("there is no add-on parameters secret in the cluster", func() {
@@ -1159,6 +1160,10 @@ var _ = Describe("ManagedOCS controller", func() {
 				})*/
 		When("the storagecluster resource is deleted", func() {
 			FIt("should create a new storagecluster in the namespace", func() {
+				setupPreConditions(true)
+				/*				Expect(k8sClient.Create(ctx, scTemplate.DeepCopy())).Should(Succeed())
+								// Wait for the storagecluster to be created
+								utils.WaitForResource(k8sClient, ctx, scTemplate.DeepCopy(), timeout, interval)*/
 				// Delete the storagecluster resource
 				Expect(k8sClient.Delete(ctx, scTemplate.DeepCopy())).Should(Succeed())
 

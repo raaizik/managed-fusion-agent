@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	ocsv1 "github.com/red-hat-storage/ocs-operator/api/v1"
 	"io"
 	"os"
 	"path/filepath"
@@ -123,6 +124,9 @@ var _ = BeforeSuite(func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		err = configv1.AddToScheme(scheme.Scheme)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = ocsv1.AddToScheme(scheme.Scheme)
 		Expect(err).NotTo(HaveOccurred())
 
 		// +kubebuilder:scaffold:scheme
